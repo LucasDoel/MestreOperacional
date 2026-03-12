@@ -171,26 +171,32 @@ else:
     date_str = selected_date.strftime('%Y-%m-%d')
     operators = sorted(metrics_df['Nome'].unique())
 
-    # CSS to make the "table" look better
+    # CSS to make the "table" look like a real table with borders
     st.markdown("""
         <style>
-        .header-row {
-            font-weight: bold;
-            background-color: #f0f2f6;
-            padding: 10px;
-            border-bottom: 2px solid #ccc;
+        [data-testid="column"] {
+            border: 1px solid #e6e9ef;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            min-height: 50px;
         }
-        .data-row {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
+        .stExpander {
+            border: 1px solid #e6e9ef;
+            margin-top: -1px;
+        }
+        p {
+            margin-bottom: 0px;
+        }
+        div.stTextInput > div > div > input {
+            text-align: center;
         }
         </style>
     """, unsafe_allow_html=True)
 
     # Column definitions
-    # 1. Nome, 2. Horário de Chegada, 3. 1° apontamento, 4. Dif Chegada-1°Ap, 5. Horário primeiro efetivo,
-    # 6. tempo de chegada até o primeiro efetivo, 7. Tempo de apontamento até o primeiro efetivo,
-    # 8. ultimo efetivo, 9. Fim de turno, 10. Tempo ultimo efetivo fim de turno
     cols_width = [1.5, 1.2, 1, 1, 1, 1, 1, 1, 1, 1]
 
     # Headers
@@ -227,22 +233,23 @@ else:
             with st.expander(f"Expandir máquinas para {op}"):
                 for idx, row in op_data.iterrows():
                     maquina = row['Máquina']
-                    st.write(f"**Máquina:** {maquina}")
 
                     # Recalculate with arrival time
                     # We use the same arrival time for all machines of this operator
                     temp_dict = {f"{op}_{maquina}": new_arrival}
                     row_metrics = calculate_arrival_metrics(pd.DataFrame([row]), temp_dict).iloc[0]
 
-                    m_cols = st.columns(cols_width[2:])
-                    m_cols[0].write(format_time(row_metrics['1° apontamento']))
-                    m_cols[1].write(format_timedelta(row_metrics['Diferença chegada até 1° apontamento']))
-                    m_cols[2].write(format_time(row_metrics['Horário primeiro efetivo']))
-                    m_cols[3].write(format_timedelta(row_metrics['tempo de chegada até o primeiro efetivo']))
-                    m_cols[4].write(format_timedelta(row_metrics['Tempo de apontamento até o primeiro efetivo']))
-                    m_cols[5].write(format_time(row_metrics['ultimo efetivo']))
-                    m_cols[6].write(format_time(row_metrics['Fim de turno']))
-                    m_cols[7].write(format_timedelta(row_metrics['Tempo ultimo efetivo fim de turno']))
+                    m_cols = st.columns(cols_width)
+                    m_cols[0].write(maquina)
+                    m_cols[1].write("---") # Arrival input is above
+                    m_cols[2].write(format_time(row_metrics['1° apontamento']))
+                    m_cols[3].write(format_timedelta(row_metrics['Diferença chegada até 1° apontamento']))
+                    m_cols[4].write(format_time(row_metrics['Horário primeiro efetivo']))
+                    m_cols[5].write(format_timedelta(row_metrics['tempo de chegada até o primeiro efetivo']))
+                    m_cols[6].write(format_timedelta(row_metrics['Tempo de apontamento até o primeiro efetivo']))
+                    m_cols[7].write(format_time(row_metrics['ultimo efetivo']))
+                    m_cols[8].write(format_time(row_metrics['Fim de turno']))
+                    m_cols[9].write(format_timedelta(row_metrics['Tempo ultimo efetivo fim de turno']))
         else:
             # Single machine
             row = op_data.iloc[0]
