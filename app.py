@@ -171,27 +171,47 @@ else:
     date_str = selected_date.strftime('%Y-%m-%d')
     operators = sorted(metrics_df['Nome'].unique())
 
-    # CSS to make the "table" look like a real table with borders
+    # CSS for a modern, pleasant table-like interface
     st.markdown("""
         <style>
-        [data-testid="column"] {
+        .custom-header {
+            background-color: #f0f2f6;
             border: 1px solid #e6e9ef;
-            padding: 5px;
+            padding: 10px;
+            font-weight: bold;
+            text-align: center;
+            font-size: 0.8rem;
             display: flex;
             align-items: center;
             justify-content: center;
+            min-height: 70px;
+        }
+        .custom-cell {
+            border-right: 1px solid #e6e9ef;
+            padding: 10px;
             text-align: center;
-            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+        }
+        .stContainer {
+            border: 1px solid #e6e9ef;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            padding: 0px !important;
         }
         .stExpander {
-            border: 1px solid #e6e9ef;
-            margin-top: -1px;
+            border: none !important;
+            box-shadow: none !important;
         }
         p {
             margin-bottom: 0px;
+            font-size: 0.9rem;
         }
         div.stTextInput > div > div > input {
             text-align: center;
+            border-radius: 5px;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -199,78 +219,77 @@ else:
     # Column definitions
     cols_width = [1.5, 1.2, 1, 1, 1, 1, 1, 1, 1, 1]
 
-    # Headers
+    # Headers with Icons
     h_cols = st.columns(cols_width)
     headers = [
-        "Nome", "Horário de chegada", "1° apontamento", "Dif. Chegada até 1° Ap",
-        "Horário primeiro efetivo", "Tempo chegada até 1° Ef", "Tempo Apont. até 1° Ef",
-        "Último efetivo", "Fim de turno", "Tempo Úl. Ef. até Fim"
+        "👤 Operador", "🕒 Chegada", "📝 1° Apont.", "⏱️ Dif. Ch. -> 1° Ap",
+        "✅ 1° Efetivo", "⏱️ Ch. -> 1° Ef", "⏱️ Ap. -> 1° Ef",
+        "🏁 Úl. Efetivo", "🚪 Fim Turno", "⏱️ Úl. Ef. -> Fim"
     ]
     for col, header in zip(h_cols, headers):
-        col.markdown(f"**{header}**")
+        col.markdown(f'<div class="custom-header">{header}</div>', unsafe_allow_html=True)
 
     for op in operators:
         op_data = metrics_df[metrics_df['Nome'] == op]
-
-        # Arrival time is per operator per day (simplification based on prompt "logo após a coluna com os nomes de operador")
         arrival_key = f"{date_str}_{op}"
         current_arrival = arrival_times.get(arrival_key, "")
 
-        # If multiple machines, use an expander
-        if len(op_data) > 1:
-            row_cols = st.columns(cols_width)
-            row_cols[0].write(op)
-            new_arrival = row_cols[1].text_input("Chegada", value=current_arrival, key=arrival_key, label_visibility="collapsed")
-            if new_arrival != current_arrival:
-                arrival_times[arrival_key] = new_arrival
-                save_arrival_times(arrival_times)
-                st.rerun()
+        with st.container(border=True):
+            # If multiple machines, use an expander
+            if len(op_data) > 1:
+                row_cols = st.columns(cols_width)
+                row_cols[0].markdown(f'<div class="custom-cell"><b>{op}</b></div>', unsafe_allow_html=True)
 
-            # Show "Múltiplas Máquinas" in other columns or leave empty
-            for i in range(2, len(row_cols)):
-                row_cols[i].write("---")
+                with row_cols[1]:
+                    new_arrival = st.text_input("Chegada", value=current_arrival, key=arrival_key, label_visibility="collapsed")
+                    if new_arrival != current_arrival:
+                        arrival_times[arrival_key] = new_arrival
+                        save_arrival_times(arrival_times)
+                        st.rerun()
 
-            with st.expander(f"Expandir máquinas para {op}"):
-                for idx, row in op_data.iterrows():
-                    maquina = row['Máquina']
+                # Placeholders for summary/multiple machines
+                for i in range(2, len(row_cols)):
+                    row_cols[i].markdown('<div class="custom-cell">---</div>', unsafe_allow_html=True)
 
-                    # Recalculate with arrival time
-                    # We use the same arrival time for all machines of this operator
-                    temp_dict = {f"{op}_{maquina}": new_arrival}
-                    row_metrics = calculate_arrival_metrics(pd.DataFrame([row]), temp_dict).iloc[0]
+                with st.expander(f"Ver {len(op_data)} máquinas de {op}"):
+                    for idx, row in op_data.iterrows():
+                        maquina = row['Máquina']
+                        temp_dict = {f"{op}_{maquina}": new_arrival}
+                        row_metrics = calculate_arrival_metrics(pd.DataFrame([row]), temp_dict).iloc[0]
 
-                    m_cols = st.columns(cols_width)
-                    m_cols[0].write(maquina)
-                    m_cols[1].write("---") # Arrival input is above
-                    m_cols[2].write(format_time(row_metrics['1° apontamento']))
-                    m_cols[3].write(format_timedelta(row_metrics['Diferença chegada até 1° apontamento']))
-                    m_cols[4].write(format_time(row_metrics['Horário primeiro efetivo']))
-                    m_cols[5].write(format_timedelta(row_metrics['tempo de chegada até o primeiro efetivo']))
-                    m_cols[6].write(format_timedelta(row_metrics['Tempo de apontamento até o primeiro efetivo']))
-                    m_cols[7].write(format_time(row_metrics['ultimo efetivo']))
-                    m_cols[8].write(format_time(row_metrics['Fim de turno']))
-                    m_cols[9].write(format_timedelta(row_metrics['Tempo ultimo efetivo fim de turno']))
-        else:
-            # Single machine
-            row = op_data.iloc[0]
-            maquina = row['Máquina']
-            row_cols = st.columns(cols_width)
-            row_cols[0].write(f"{op} ({maquina})")
+                        m_cols = st.columns(cols_width)
+                        m_cols[0].markdown(f'<div class="custom-cell" style="font-size:0.8rem">{maquina}</div>', unsafe_allow_html=True)
+                        m_cols[1].markdown('<div class="custom-cell">---</div>', unsafe_allow_html=True)
+                        m_cols[2].markdown(f'<div class="custom-cell">{format_time(row_metrics["1° apontamento"])}</div>', unsafe_allow_html=True)
+                        m_cols[3].markdown(f'<div class="custom-cell">{format_timedelta(row_metrics["Diferença chegada até 1° apontamento"])}</div>', unsafe_allow_html=True)
+                        m_cols[4].markdown(f'<div class="custom-cell">{format_time(row_metrics["Horário primeiro efetivo"])}</div>', unsafe_allow_html=True)
+                        m_cols[5].markdown(f'<div class="custom-cell">{format_timedelta(row_metrics["tempo de chegada até o primeiro efetivo"])}</div>', unsafe_allow_html=True)
+                        m_cols[6].markdown(f'<div class="custom-cell">{format_timedelta(row_metrics["Tempo de apontamento até o primeiro efetivo"])}</div>', unsafe_allow_html=True)
+                        m_cols[7].markdown(f'<div class="custom-cell">{format_time(row_metrics["ultimo efetivo"])}</div>', unsafe_allow_html=True)
+                        m_cols[8].markdown(f'<div class="custom-cell">{format_time(row_metrics["Fim de turno"])}</div>', unsafe_allow_html=True)
+                        m_cols[9].markdown(f'<div class="custom-cell">{format_timedelta(row_metrics["Tempo ultimo efetivo fim de turno"])}</div>', unsafe_allow_html=True)
+            else:
+                # Single machine
+                row = op_data.iloc[0]
+                maquina = row['Máquina']
+                row_cols = st.columns(cols_width)
+                row_cols[0].markdown(f'<div class="custom-cell"><b>{op}</b><br><small>({maquina})</small></div>', unsafe_allow_html=True)
 
-            new_arrival = row_cols[1].text_input("Chegada", value=current_arrival, key=arrival_key, label_visibility="collapsed")
-            if new_arrival != current_arrival:
-                arrival_times[arrival_key] = new_arrival
-                save_arrival_times(arrival_times)
-                st.rerun()
+                with row_cols[1]:
+                    new_arrival = st.text_input("Chegada", value=current_arrival, key=arrival_key, label_visibility="collapsed")
+                    if new_arrival != current_arrival:
+                        arrival_times[arrival_key] = new_arrival
+                        save_arrival_times(arrival_times)
+                        st.rerun()
 
-            temp_dict = {f"{op}_{maquina}": new_arrival}
-            row_metrics = calculate_arrival_metrics(pd.DataFrame([row]), temp_dict).iloc[0]
+                temp_dict = {f"{op}_{maquina}": new_arrival}
+                row_metrics = calculate_arrival_metrics(pd.DataFrame([row]), temp_dict).iloc[0]
 
-            row_cols[2].write(format_time(row_metrics['1° apontamento']))
-            row_cols[3].write(format_timedelta(row_metrics['Diferença chegada até 1° apontamento']))
-            row_cols[4].write(format_time(row_metrics['Horário primeiro efetivo']))
-            row_cols[5].write(format_timedelta(row_metrics['tempo de chegada até o primeiro efetivo']))
-            row_cols[6].write(format_timedelta(row_metrics['Tempo de apontamento até o primeiro efetivo']))
-            row_cols[7].write(format_time(row_metrics['ultimo efetivo']))
-            row_cols[8].write(format_time(row_metrics['Fim de turno']))
-            row_cols[9].write(format_timedelta(row_metrics['Tempo ultimo efetivo fim de turno']))
+                row_cols[2].markdown(f'<div class="custom-cell">{format_time(row_metrics["1° apontamento"])}</div>', unsafe_allow_html=True)
+                row_cols[3].markdown(f'<div class="custom-cell">{format_timedelta(row_metrics["Diferença chegada até 1° apontamento"])}</div>', unsafe_allow_html=True)
+                row_cols[4].markdown(f'<div class="custom-cell">{format_time(row_metrics["Horário primeiro efetivo"])}</div>', unsafe_allow_html=True)
+                row_cols[5].markdown(f'<div class="custom-cell">{format_timedelta(row_metrics["tempo de chegada até o primeiro efetivo"])}</div>', unsafe_allow_html=True)
+                row_cols[6].markdown(f'<div class="custom-cell">{format_timedelta(row_metrics["Tempo de apontamento até o primeiro efetivo"])}</div>', unsafe_allow_html=True)
+                row_cols[7].markdown(f'<div class="custom-cell">{format_time(row_metrics["ultimo efetivo"])}</div>', unsafe_allow_html=True)
+                row_cols[8].markdown(f'<div class="custom-cell">{format_time(row_metrics["Fim de turno"])}</div>', unsafe_allow_html=True)
+                row_cols[9].markdown(f'<div class="custom-cell">{format_timedelta(row_metrics["Tempo ultimo efetivo fim de turno"])}</div>', unsafe_allow_html=True)
